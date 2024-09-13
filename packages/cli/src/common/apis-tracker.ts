@@ -220,7 +220,6 @@ export const getTokenMinter = async function (
             if (typeof c.utxo.satoshis === 'string') {
               c.utxo.satoshis = parseInt(c.utxo.satoshis);
             }
-
             return {
               utxo: c.utxo,
               state: {
