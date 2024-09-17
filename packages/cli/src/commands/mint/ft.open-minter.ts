@@ -376,6 +376,27 @@ export async function openMint(
     Postage.MINTER_POSTAGE * newMinter -
     Postage.TOKEN_POSTAGE;
 
+
+    // minter  {
+    //   utxo: {
+    //     txId: '838867bf0aadea470b25e1a3c0eeaec76b7d027153528e67989bf98f26d7030b',
+    //     outputIndex: 2,
+    //     script: '5120989faac344e083788bbd911df47d1ca46761b2dcc19eacdb827fce8417aa3ec8',
+    //     satoshis: 331
+    //   },
+    //   state: {
+    //     protocolState: ProtocolState { stateHashList: [Array], dataList: undefined },
+    //     data: {
+    //       tokenScript: '5120164ee8d0e8279276f4c8689e6a6e62f9a99ed795e214ffb7d0cfff7388b9d9b9',
+    //       isPremined: true,
+    //       remainingSupply: 40000n
+    //     }
+    //   }
+    // }
+    let stateHashList=minterContract.state.protocolState.stateHashList
+    console.log('minter ',minterContract.utxo.txId,minterContract.utxo.outputIndex,minterContract.utxo.satoshis/100000000,minterContract.utxo.script)
+    console.warn('       ',stateHashList[0],stateHashList[1],stateHashList[2],stateHashList[3],stateHashList[4])
+    console.log('feeUtxo',feeUtxos[0].txId,feeUtxos[0].outputIndex,feeUtxos[0].satoshis/100000000,'changeAmount',changeAmount/100000000,'\n')
   if (changeAmount < 546) {
     const message = 'Insufficient satoshis balance!';
     return new Error(message);
@@ -447,7 +468,7 @@ export async function openMint(
   const res = await broadcast(config, wallet, revealTx.uncheckedSerialize());
 
   if (res instanceof Error) {
-    //logerror('broadcast tx failed!', res);
+    //logerror('broadcast tx failed!', res.message);
     return res;
   }
   spendService.updateSpends(revealTx);

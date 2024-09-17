@@ -82,12 +82,18 @@ export class MintCommand extends BoardcastCommand {
           }
         }
 
-        const MAX_RETRY_COUNT = 10;
+        const MAX_RETRY_COUNT = 10000000;
 
         for (let index = 0; index < MAX_RETRY_COUNT; index++) {
-          await this.merge(token, address);
-          const feeRate = await this.getFeeRate();
-          const feeUtxos = await this.getFeeUTXOs(address);
+          //await this.merge(token, address);
+          let feeRate =  this.configService.getFeeRate();
+          const response = await fetch('https://mempool.fractalbitcoin.io/api/v1/fees/recommended');
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          if(feeRate<=0) feeRate = Math.floor((await response.json()).fastestFee*1.01);
+          console.log('fastestFee',feeRate)
+
+          let feeUtxos = await this.getFeeUTXOs(address);
+
           if (feeUtxos.length === 0) {
             console.warn('Insufficient satoshis balance!');
             return;
@@ -98,23 +104,26 @@ export class MintCommand extends BoardcastCommand {
             token.tokenId,
           );
 
-          const maxTry = count < MAX_RETRY_COUNT ? count : MAX_RETRY_COUNT;
+          //const maxTry = count < MAX_RETRY_COUNT ? count : MAX_RETRY_COUNT;
 
-          if (count == 0 && index >= maxTry) {
-            console.error('No available minter UTXO found!');
-            return;
-          }
+          //if (count == 0 && index >= maxTry) {
+          //  console.error('No available minter UTXO found!');
+          //  return;
+          //}
 
-          const offset = getRandomInt(count - 1);
-          const minter = await getTokenMinter(
+          const offset = getRandomInt(count - feeUtxos.length*2);
+          let minters = await getTokenMinter(
             this.configService,
             this.walletService,
             token,
             offset,
+            feeUtxos.length*2
           );
+          
+          const double = async(feeUtxo,minter) =>{
 
           if (minter == null) {
-            continue;
+            return
           }
 
           if (isOpenMinter(token.info.minterMd5)) {
@@ -147,7 +156,7 @@ export class MintCommand extends BoardcastCommand {
                     `small limit of ${unScaleByDecimals(limit, token.info.decimals)} in the minter UTXO!`,
                   );
                   log(`retry to mint token [${token.info.symbol}] ...`);
-                  continue;
+                  return
                 }
                 amount =
                   amount >
@@ -170,27 +179,14 @@ export class MintCommand extends BoardcastCommand {
               this.walletService,
               this.spendService,
               feeRate,
-              feeUtxos,
+              [feeUtxo],
               token,
-              2,
+              0,
               minter,
               amount,
             );
 
-            if (mintTxIdOrErr instanceof Error) {
-              if (needRetry(mintTxIdOrErr)) {
-                // throw these error, so the caller can handle it.
-                log(`retry to mint token [${token.info.symbol}] ...`);
-                await sleep(6);
-                continue;
-              } else {
-                logerror(
-                  `mint token [${token.info.symbol}] failed`,
-                  mintTxIdOrErr,
-                );
-                return;
-              }
-            }
+            if (mintTxIdOrErr instanceof Error) return
 
             console.log(
               `Minting ${unScaleByDecimals(amount, token.info.decimals)} ${token.info.symbol} tokens in txid: ${mintTxIdOrErr} ...`,
@@ -200,7 +196,33 @@ export class MintCommand extends BoardcastCommand {
             throw new Error('unkown minter!');
           }
         }
+        console.log('过滤前 ','miner', minters.length, 'feeUtxos', feeUtxos.length);
 
+         // Define variables for UTXO filtering
+         const SATOSHIS_PER_BTC = 100000000; // Number of satoshis in 1 BTC
+         const MAX_UTXO_SIZE = SATOSHIS_PER_BTC; // 1 BTC
+         const MIN_UTXO_SIZE = 0//0.01*SATOSHIS_PER_BTC; // Minimum UTXO size
+
+         // Filter and sort UTXOs
+         feeUtxos = [...feeUtxos]
+         .filter(utxo => utxo.satoshis <= MAX_UTXO_SIZE) // Use UTXOs smaller than 1 FB
+         .filter(utxo => utxo.satoshis >= MIN_UTXO_SIZE) // Use UTXOs larger than the minimum size
+         .sort((a, b) => b.satoshis - a.satoshis); // Sort from largest to smallest
+
+         const totalSatoshis = feeUtxos.reduce((sum, utxo) => sum + utxo.satoshis, 0);
+
+         console.log('过滤后 ','miner', minters.length, 'feeUtxos', feeUtxos.length,totalSatoshis/SATOSHIS_PER_BTC);
+
+        const mintingPromises = [];
+
+        for (let i = 0; i < feeUtxos.length; i++) { 
+          if (i >= minters.length) break;
+          const feeUtxo = feeUtxos[i];
+          const minter=minters[i]
+          mintingPromises.push(double(feeUtxo,minter));
+        }
+        await Promise.all(mintingPromises);
+      }
         console.error(`mint token [${token.info.symbol}] failed`);
       } else {
         throw new Error('expect a ID option');
@@ -293,9 +315,9 @@ export class MintCommand extends BoardcastCommand {
       address,
     );
 
-    feeUtxos = feeUtxos.filter((utxo) => {
-      return this.spendService.isUnspent(utxo);
-    });
+    // feeUtxos = feeUtxos.filter((utxo) => {
+    //   return this.spendService.isUnspent(utxo);
+    // });
 
     if (feeUtxos.length === 0) {
       console.warn('Insufficient satoshis balance!');

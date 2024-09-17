@@ -179,8 +179,9 @@ export const getTokenMinter = async function (
   wallet: WalletService,
   metadata: TokenMetadata,
   offset: number = 0,
-): Promise<OpenMinterContract | null> {
-  const url = `${config.getTracker()}/api/minters/${metadata.tokenId}/utxos?limit=1&offset=${offset}`;
+  count:number = 1,
+): Promise<OpenMinterContract[] | null> {
+  const url = `${config.getTracker()}/api/minters/${metadata.tokenId}/utxos?limit=${count}&offset=${offset}`;
   return fetch(url, config.withProxy())
     .then((res) => res.json())
     .then((res: any) => {
@@ -230,11 +231,11 @@ export const getTokenMinter = async function (
       }
     })
     .then((minters) => {
-      return minters[0] || null;
+      return minters || null;
     })
     .catch((e) => {
       logerror(`fetch minters failed, minter: ${metadata.minterAddr}`, e);
-      return null;
+      return [];
     });
 };
 
