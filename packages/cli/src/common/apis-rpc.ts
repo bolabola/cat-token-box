@@ -278,6 +278,8 @@ export const rpc_create_watchonly_wallet = async function (
     }),
   })
     .then((res) => {
+      console.log(res)
+
       if (res.status === 200) {
         return res.json();
       }
@@ -290,6 +292,8 @@ export const rpc_create_watchonly_wallet = async function (
       return null;
     })
     .catch((e: Error) => {
+      console.log(e)
+
       return e;
     });
 };
@@ -331,7 +335,6 @@ export const rpc_importdescriptors = async function (
     }),
   })
     .then((res) => {
-      console.log(res)
       if (res.status === 200) {
         return res.json();
       }
